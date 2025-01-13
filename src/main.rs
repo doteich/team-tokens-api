@@ -1,61 +1,116 @@
 use axum::{
-    http::{header, StatusCode}, response::IntoResponse, routing::{get, post}, Extension, Json, Router 
+    http::StatusCode,
+    response::{self, IntoResponse},
+    routing::{get, post},
+    Extension, Json, Router,
 };
+use env_logger;
+use log::{error, info, warn};
 use serde_json::json;
-use sqlx::{ Pool, Postgres};
+use sqlx::{Pool, Postgres};
+use std::fs;
 mod db;
 mod routes;
+mod utils;
 
 #[derive(serde::Serialize)]
-pub struct ApiError{
-    status_code: u8,
-    message:String
+pub struct ApiError {
+    error_message: String,
+    status_code: u16,
+    client_message: String,
 }
 
-impl IntoResponse for ApiError{
-    fn into_response(self) -> axum::response::Response {
-        (self.status_code, [(header::CONTENT_TYPE, "appliction/json")], Json(json!("statusCode": self.status_code, "message": self.message)));
+#[derive(serde::Deserialize)]
+struct Config {
+    db: DbConfig,
+}
+#[derive(serde::Deserialize)]
+struct DbConfig {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    db: String,
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> response::Response {
+        warn!(
+            "request failed: {} - client message: {}",
+            self.error_message, self.client_message
+        );
+
+        let status_code =
+            StatusCode::from_u16(self.status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let error_body = json!({
+            "message": self.client_message
+        });
+
+        (status_code, Json(error_body)).into_response()
     }
 }
 
-
 #[tokio::main]
 async fn main() {
-    let url = "postgres://postgres:pass@localhost:5432/team-tokens";
+    std::env::set_var("RUST_LOG", "info");
 
-    let pool_res = db::db::create_pool(url).await;
+    env_logger::init();
+
+    let conf_res = read_conf();
+
+    let conf = match conf_res {
+        Ok(c) => c,
+        Err(e) => {
+            error!("invalid config file: {}", e);
+            return;
+        }
+    };
+
+    let con_str = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        conf.db.user, conf.db.password, conf.db.host, conf.db.port, conf.db.db
+    );
+
+    //let url = "postgres://postgres:pass@localhost:5432/team-tokens";
+
+    let pool_res = db::db::create_pool(&con_str[..]).await;
 
     let pool = match pool_res {
         Ok(pool) => pool,
         Err(e) => {
-            println!("connection failed: {}", e);
+            error!("connection failed: {}", e);
             return;
         }
     };
 
     if let Err(e) = db::db::run_migration(&pool).await {
-        println!("migration failed: {}", e);
+        error!("migration failed: {}", e);
         return;
     };
 
-
-
     let router = create_router(pool.clone());
+
+    info!("server now acception connection on port 3000");
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
     axum::serve(listener, router).await.unwrap();
 
-    println!("connection established");
+    info!("server now acception connection on port 3000")
 }
 
+fn read_conf() -> Result<Config, Box<dyn std::error::Error>> {
+    let res = fs::read_to_string("./config/config.json")?;
 
-fn create_router(pool:Pool<Postgres>) -> Router {
+    let config = serde_json::from_str(&res[..])?;
+
+    Ok(config)
+}
+
+fn create_router(pool: Pool<Postgres>) -> Router {
     Router::new()
         .route("/", get(routes::healthz::get))
-        .route("/v1", post(routes::team::post))
+        .route("/v1/teams", post(routes::team::post))
         .layer(Extension(pool))
 }
-
-
