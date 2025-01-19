@@ -1,7 +1,7 @@
 use axum::{
     http::StatusCode,
     response::{self, IntoResponse},
-    routing::{get, post},
+    routing::{get, post, put},
     Extension, Json, Router,
 };
 use env_logger;
@@ -55,7 +55,7 @@ async fn main() {
     std::env::set_var("RUST_LOG", "info");
 
     env_logger::init();
-
+    
     let conf_res = read_conf();
 
     let conf = match conf_res {
@@ -112,5 +112,6 @@ fn create_router(pool: Pool<Postgres>) -> Router {
     Router::new()
         .route("/", get(routes::healthz::get))
         .route("/v1/teams", post(routes::team::post))
+        .route("/v1/user", put(routes::user::put))
         .layer(Extension(pool))
 }

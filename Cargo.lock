@@ -1767,6 +1767,7 @@ dependencies = [
  "chrono",
  "env_logger",
  "log",
+ "regex",
  "serde",
  "serde_json",
  "sqlx",
