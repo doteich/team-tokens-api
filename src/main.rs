@@ -6,6 +6,7 @@ use axum::{
 };
 use env_logger;
 use log::{error, info, warn};
+use routes::user;
 use serde_json::json;
 use sqlx::{Pool, Postgres};
 use std::fs;
@@ -55,7 +56,7 @@ async fn main() {
     std::env::set_var("RUST_LOG", "info");
 
     env_logger::init();
-    
+
     let conf_res = read_conf();
 
     let conf = match conf_res {
@@ -113,5 +114,6 @@ fn create_router(pool: Pool<Postgres>) -> Router {
         .route("/", get(routes::healthz::get))
         .route("/v1/teams", post(routes::team::post))
         .route("/v1/user", put(routes::user::put))
+        .route("/v1/user/login", post(user::login))
         .layer(Extension(pool))
 }

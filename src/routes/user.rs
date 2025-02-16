@@ -7,18 +7,38 @@ use chrono::Utc;
 use serde::Deserialize;
 use sqlx::Pool;
 use sqlx::Postgres;
+use validator::Validate;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UserRequest {
+    #[validate(length(min = 5, max = 127))]
     name: String,
     password: String,
+    #[validate(email)]
     email: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    email: String,
+    password: String,
 }
 
 pub async fn put(
     Extension(pool): Extension<Pool<Postgres>>,
     Json(body): Json<UserRequest>,
 ) -> Result<(), ApiError> {
+    match body.validate() {
+        Ok(_) => (),
+        Err(e) => {
+            return Err(ApiError {
+                client_message: "invalid input".to_string(),
+                error_message: e.to_string(),
+                status_code: 400,
+            });
+        }
+    }
+
     let pw = body.password;
 
     let is_valid = validate_password(pw.clone()).map_err(|e| ApiError {
@@ -49,8 +69,68 @@ pub async fn put(
         }
     };
 
-    //sqlx::query("INSERT INTO")
+    let dt = Utc::now();
 
+    let res = sqlx::query(
+        "INSERT INTO users (name, password, email, created_at) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(body.name)
+    .bind(pw_hash)
+    .bind(body.email)
+    .bind(dt)
+    .execute(&pool)
+    .await;
+
+    match res {
+        Ok(_) => (),
+        Err(e) => {
+            return Err(ApiError {
+                client_message: "unable to process request".to_string(),
+                error_message: e.to_string(),
+                status_code: 500,
+            });
+        }
+    }
+
+    return Ok(());
+}
+pub async fn login(
+    Extension(pool): Extension<Pool<Postgres>>,
+    Json(body): Json<LoginRequest>,
+) -> Result<(), ApiError> {
+    let user_result: Result<(String, String, String), sqlx::Error> =
+        sqlx::query_as("SELECT name, password, email FROM users WHERE email=$1")
+            .bind(body.email)
+            .fetch_one(&pool)
+            .await;
+
+    let user_entry = match user_result {
+        Ok(row) => row,
+        Err(e) => {
+            let x = ApiError {
+                client_message: "Unable to process request".to_string(),
+                error_message: e.to_string(),
+                status_code: 500,
+            };
+            return Err(x);
+        }
+    };
+
+    println!("{:?}", user_entry);
+
+    let is_valid = match verify_password(body.password, user_entry.1) {
+        Ok(b) => b,
+        Err(e) => {
+            let x = ApiError {
+                client_message: "Unable to verify password".to_string(),
+                error_message: e.to_string(),
+                status_code: 500,
+            };
+            return Err(x);
+        }
+    };
+
+    println!("password is valid: {}", is_valid);
 
     return Ok(());
 }
