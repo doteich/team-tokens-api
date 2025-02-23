@@ -11,5 +11,6 @@
 
             ]
         }
-    }
+    },
+    "postStartCommand": "bash ./dependencies.sh"
 }

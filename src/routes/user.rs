@@ -1,9 +1,14 @@
+use std::sync::Arc;
+
 use crate::utils::password;
 use crate::utils::password::validate_password;
 use crate::utils::password::verify_password;
+use crate::utils::token::JWT;
 use crate::ApiError;
+use axum::extract::State;
 use axum::{Extension, Json};
 use chrono::Utc;
+use jwt_simple::token;
 use serde::Deserialize;
 use sqlx::Pool;
 use sqlx::Postgres;
@@ -94,9 +99,13 @@ pub async fn put(
 
     return Ok(());
 }
+
+
+
 pub async fn login(
     Extension(pool): Extension<Pool<Postgres>>,
-    Json(body): Json<LoginRequest>,
+    State(jwt): State<Arc<JWT>>,
+    Json(body): Json<LoginRequest>
 ) -> Result<(), ApiError> {
     let user_result: Result<(String, String, String), sqlx::Error> =
         sqlx::query_as("SELECT name, password, email FROM users WHERE email=$1")
@@ -131,6 +140,20 @@ pub async fn login(
     };
 
     println!("password is valid: {}", is_valid);
+
+    let t = match jwt.create_token() {
+        Ok(token) => token,
+        Err(e) => {
+            let x = ApiError {
+                client_message: "Failed to create token".to_string(),
+                error_message: e.to_string(),
+                status_code: 500,
+            };
+            return Err(x);
+        }
+    };
+
+    println!("New token: {}", t);
 
     return Ok(());
 }

@@ -10,6 +10,8 @@ use routes::user;
 use serde_json::json;
 use sqlx::{Pool, Postgres};
 use std::fs;
+use std::sync::Arc;
+use utils::token::{init_jwt, JWT};
 mod db;
 mod routes;
 mod utils;
@@ -89,11 +91,14 @@ async fn main() {
         return;
     };
 
-    let router = create_router(pool.clone());
+    let jwt_instance = Arc::new(init_jwt());
+
+
+    let router = create_router(pool.clone(), jwt_instance);
 
     info!("server now acception connection on port 3000");
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .unwrap();
     axum::serve(listener, router).await.unwrap();
@@ -109,11 +114,12 @@ fn read_conf() -> Result<Config, Box<dyn std::error::Error>> {
     Ok(config)
 }
 
-fn create_router(pool: Pool<Postgres>) -> Router {
+fn create_router(pool: Pool<Postgres>, jwt: Arc<JWT>) -> Router {
     Router::new()
         .route("/", get(routes::healthz::get))
         .route("/v1/teams", post(routes::team::post))
         .route("/v1/user", put(routes::user::put))
         .route("/v1/user/login", post(user::login))
         .layer(Extension(pool))
+        .with_state(jwt) // I want to inject the jwt here 
 }
