@@ -2290,6 +2290,7 @@ dependencies = [
  "axum",
  "chrono",
  "env_logger",
+ "http",
  "jwt-simple",
  "log",
  "regex",

@@ -1,21 +1,25 @@
+use crate::ApiError;
 use axum::{Extension, Json};
 use chrono::Utc;
+use http::header::HeaderMap;
 use serde::Deserialize;
 use sqlx::Pool;
 use sqlx::Postgres;
-
-use crate::ApiError;
 
 #[derive(Deserialize)]
 pub struct TeamRequest {
     name: String,
     owner: String,
 }
-
-pub async fn post(
+#[axum::debug_handler]
+pub async fn put(
     Extension(pool): Extension<Pool<Postgres>>,
+    headers: HeaderMap,
     Json(body): Json<TeamRequest>,
 ) -> Result<(), ApiError> {
+    let auth = headers.get("Authorization").unwrap().to_str().unwrap();
+
+    
     let dt = Utc::now();
 
     let res = sqlx::query("INSERT INTO teams (owner, name, created_at) VALUES ($1, $2, $3)")

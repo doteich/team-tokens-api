@@ -117,7 +117,7 @@ fn read_conf() -> Result<Config, Box<dyn std::error::Error>> {
 fn create_router(pool: Pool<Postgres>, jwt: Arc<JWT>) -> Router {
     Router::new()
         .route("/", get(routes::healthz::get))
-        .route("/v1/teams", post(routes::team::post))
+        .route("/v1/teams", put(routes::team::put))
         .route("/v1/user", put(routes::user::put))
         .route("/v1/user/login", post(user::login))
         .layer(Extension(pool))
