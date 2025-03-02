@@ -6,7 +6,6 @@ use crate::utils::password::verify_password;
 use crate::utils::token::JWT;
 use crate::ApiError;
 use axum::extract::State;
-use axum::http::Response;
 use axum::{Extension, Json};
 use chrono::Utc;
 use serde::Deserialize;
@@ -103,19 +102,16 @@ pub async fn put(
         }
     }
 
-    
-
     return Ok(());
 }
-
 
 pub async fn login(
     Extension(pool): Extension<Pool<Postgres>>,
     State(jwt): State<Arc<JWT>>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<Token>, ApiError> {
-    let user_result: Result<(String, String, String), sqlx::Error> =
-        sqlx::query_as("SELECT name, password, email FROM users WHERE email=$1")
+    let user_result: Result<(i64, String, String, String), sqlx::Error> =
+        sqlx::query_as("SELECT id, name, password, email FROM users WHERE email=$1")
             .bind(body.email)
             .fetch_one(&pool)
             .await;
@@ -132,8 +128,7 @@ pub async fn login(
         }
     };
 
-
-    let is_valid = match verify_password(body.password, user_entry.1) {
+    let is_valid = match verify_password(body.password, user_entry.2) {
         Ok(b) => b,
         Err(e) => {
             let x = ApiError {
@@ -145,7 +140,7 @@ pub async fn login(
         }
     };
 
-    let t = match jwt.create_token() {
+    let t = match jwt.create_token(user_entry.0.to_string()) {
         Ok(token) => token,
         Err(e) => {
             let x = ApiError {
@@ -171,10 +166,5 @@ pub async fn login(
         validity: 7200,
     };
 
-
-
     Ok(Json(res_body))
-
-    
-
 }

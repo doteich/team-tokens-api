@@ -6,19 +6,20 @@ pub struct JWT {
 }
 
 impl JWT {
-    pub fn create_token(&self) -> Result<String, jwt_simple::Error> {
-        let claims = Claims::create(Duration::from_hours(2));
+    pub fn create_token(&self, user_id: String) -> Result<String, jwt_simple::Error> {
+        let claims = Claims::create(Duration::from_hours(2)).with_subject(user_id);
         let res = self.key.authenticate(claims)?;
         return Ok(res);
     }
 
-    pub fn verify_token(&self, t: String) -> Result<String, jwt_simple::Error> {
-        let claims = self.key.verify_token::<NoCustomClaims>(&t, None)?;
-        let id = claims.jwt_id;
+    pub fn verify_token(&self, t: &str) -> Result<String, jwt_simple::Error> {
+        let claims = self.key.verify_token::<NoCustomClaims>(t, None)?;
 
-        match id {
-            Some(x) => Ok(x),
-            None => return Ok("".to_string()),
+        let user_id = claims.subject;
+
+        match user_id {
+            None => return Ok(String::new()),
+            Some(id) => return Ok(id),
         }
     }
 }
